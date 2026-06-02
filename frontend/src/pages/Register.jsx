@@ -1,14 +1,19 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export default function Register() {
-  const { register } = useAuth();
+  const { register, isAuthenticated, isAdmin, loading } = useAuth();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Already signed in? Skip the form.
+  if (!loading && isAuthenticated) {
+    return <Navigate to={isAdmin ? "/admin" : "/dashboard"} replace />;
+  }
 
   function update(field) {
     return (e) => setForm({ ...form, [field]: e.target.value });

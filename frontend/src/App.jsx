@@ -25,7 +25,8 @@ import NotFound from "./pages/NotFound";
 
 /** Sends a logged-in user to the right home, or to login. */
 function HomeRedirect() {
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, isAdmin, loading } = useAuth();
+  if (loading) return null; // wait for the session check before redirecting
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return <Navigate to={isAdmin ? "/admin" : "/dashboard"} replace />;
 }
