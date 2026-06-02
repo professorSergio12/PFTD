@@ -9,6 +9,7 @@ import {
   currentDateString,
   humanDate,
   statusLabel,
+  STATUS_OPTIONS,
   groupByProject,
 } from "../../utils/format";
 
@@ -17,6 +18,9 @@ export default function EmployeePlans() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [drafts, setDrafts] = useState({}); // planId -> adminExpectedTime
+  const [editing, setEditing] = useState(null); // planId being edited
+  const [edit, setEdit] = useState({}); // edit draft fields
+  const [busy, setBusy] = useState(null); // planId being saved/deleted
   const [assign, setAssign] = useState({
     projectName: "",
     milestoneName: "",
@@ -46,12 +50,60 @@ export default function EmployeePlans() {
 
   async function saveExpected(planId) {
     try {
+      const raw = drafts[planId];
       await api.patch(`/admin/plans/${planId}`, {
-        adminExpectedTime: Number(drafts[planId]),
+        adminExpectedTime: raw === "" ? null : Number(raw),
       });
       load();
     } catch (err) {
       setError(err.message);
+    }
+  }
+
+  function startEdit(p) {
+    setEditing(p._id);
+    setEdit({
+      milestoneName: p.milestoneName || "",
+      taskDetails: p.taskDetails || "",
+      userEstimatedTime: p.userEstimatedTime,
+      status: p.status,
+    });
+  }
+
+  // Admin can fully edit an employee's plan (details, time, status, expected).
+  async function saveEdit(p) {
+    const hasSubtasks = p.subtasks && p.subtasks.length > 0;
+    setBusy(p._id);
+    try {
+      const payload = {
+        milestoneName: edit.milestoneName,
+        taskDetails: edit.taskDetails,
+        status: edit.status,
+        adminExpectedTime: drafts[p._id] === "" ? null : Number(drafts[p._id]),
+      };
+      if (!hasSubtasks) payload.userEstimatedTime = Number(edit.userEstimatedTime);
+      await api.patch(`/admin/plans/${p._id}`, payload);
+      setEditing(null);
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function deletePlan(p) {
+    if (!window.confirm(`Delete "${p.taskDetails}"? This can't be undone.`)) {
+      return;
+    }
+    setBusy(p._id);
+    try {
+      await api.delete(`/admin/plans/${p._id}`);
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -147,42 +199,146 @@ export default function EmployeePlans() {
                 </tr>
               </thead>
               <tbody>
-                {group.items.map((p) => (
-                  <tr key={p._id}>
-                    <td className="muted small">{humanDate(p.date)}</td>
-                    <td className="muted">{p.milestoneName || "—"}</td>
-                    <td>
-                      {p.taskDetails}
-                      <SubtaskList subtasks={p.subtasks} />
-                    </td>
-                    <td>{p.userEstimatedTime} min</td>
-                    <td>
-                      <span className={`pill pill-${p.status}`}>
-                        {statusLabel(p.status)}
-                      </span>
-                    </td>
-                    <td className="col-admin">
-                      <input
-                        className="inline-input"
-                        type="number"
-                        min="0"
-                        value={drafts[p._id]}
-                        onChange={(e) =>
-                          setDrafts({ ...drafts, [p._id]: e.target.value })
-                        }
-                        placeholder="set min"
-                      />
-                    </td>
-                    <td>
-                      <button
-                        className="btn btn-primary btn-sm"
-                        onClick={() => saveExpected(p._id)}
-                      >
-                        Save
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {group.items.map((p) => {
+                  const hasSubtasks = p.subtasks && p.subtasks.length > 0;
+                  return editing === p._id ? (
+                    <tr key={p._id}>
+                      <td className="muted small">{humanDate(p.date)}</td>
+                      <td>
+                        <input
+                          className="inline-input"
+                          style={{ width: "100%" }}
+                          value={edit.milestoneName}
+                          onChange={(e) =>
+                            setEdit({ ...edit, milestoneName: e.target.value })
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="inline-input"
+                          style={{ width: "100%" }}
+                          value={edit.taskDetails}
+                          onChange={(e) =>
+                            setEdit({ ...edit, taskDetails: e.target.value })
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="inline-input"
+                          type="number"
+                          min="0"
+                          value={
+                            hasSubtasks
+                              ? p.userEstimatedTime
+                              : edit.userEstimatedTime
+                          }
+                          disabled={hasSubtasks}
+                          title={
+                            hasSubtasks ? "Auto-summed from subtasks" : undefined
+                          }
+                          onChange={(e) =>
+                            setEdit({
+                              ...edit,
+                              userEstimatedTime: e.target.value,
+                            })
+                          }
+                        />
+                      </td>
+                      <td>
+                        <select
+                          className="inline-input"
+                          style={{ width: "auto" }}
+                          value={edit.status}
+                          onChange={(e) =>
+                            setEdit({ ...edit, status: e.target.value })
+                          }
+                        >
+                          {STATUS_OPTIONS.map((s) => (
+                            <option key={s} value={s}>
+                              {statusLabel(s)}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="col-admin">
+                        <input
+                          className="inline-input"
+                          type="number"
+                          min="0"
+                          value={drafts[p._id]}
+                          onChange={(e) =>
+                            setDrafts({ ...drafts, [p._id]: e.target.value })
+                          }
+                        />
+                      </td>
+                      <td className="row-actions">
+                        <button
+                          className="btn btn-primary btn-sm"
+                          disabled={busy === p._id}
+                          onClick={() => saveEdit(p)}
+                        >
+                          Save
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => setEditing(null)}
+                        >
+                          Cancel
+                        </button>
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={p._id}>
+                      <td className="muted small">{humanDate(p.date)}</td>
+                      <td className="muted">{p.milestoneName || "—"}</td>
+                      <td>
+                        {p.taskDetails}
+                        <SubtaskList subtasks={p.subtasks} />
+                      </td>
+                      <td>{p.userEstimatedTime} min</td>
+                      <td>
+                        <span className={`pill pill-${p.status}`}>
+                          {statusLabel(p.status)}
+                        </span>
+                      </td>
+                      <td className="col-admin">
+                        <input
+                          className="inline-input"
+                          type="number"
+                          min="0"
+                          value={drafts[p._id]}
+                          onChange={(e) =>
+                            setDrafts({ ...drafts, [p._id]: e.target.value })
+                          }
+                          placeholder="set min"
+                        />
+                      </td>
+                      <td className="row-actions">
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => saveExpected(p._id)}
+                        >
+                          Save
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => startEdit(p)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          disabled={busy === p._id}
+                          onClick={() => deletePlan(p)}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

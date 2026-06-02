@@ -6,6 +6,7 @@ const {
   getUsers,
   getUserPlans,
   updatePlanAsAdmin,
+  deletePlanAsAdmin,
   assignTask,
   resourceDashboard,
   overview,
@@ -21,6 +22,7 @@ router.patch("/users/:id", updateUser);
 router.get("/users/:id/plans", getUserPlans);
 router.post("/users/:id/plans", assignTask);
 router.patch("/plans/:id", updatePlanAsAdmin);
+router.delete("/plans/:id", deletePlanAsAdmin);
 router.get("/resource-dashboard", resourceDashboard);
 router.get("/overview", overview);
 

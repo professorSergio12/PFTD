@@ -1,5 +1,7 @@
 /** Shared formatting + small client-side helpers. */
 
+// Assignable work minutes per day for plans / capacity (8h of actual work).
+// Lunch is separate and only affects reminder timing on the backend.
 export const DAILY_CAPACITY = 480;
 
 /** Today's date as "YYYY-MM-DD" (matches the backend). */

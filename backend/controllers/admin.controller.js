@@ -85,9 +85,17 @@ const getUsers = asyncHandler(async (req, res) => {
     });
   });
 
+  // Availability status reflects TODAY's tasks vs one day's capacity, so it
+  // matches the dashboard's "Team Availability".
+  const today = currentDateString();
+
   const result = await Promise.all(
     users.map(async (u) => {
-      const plans = await Plan.find({ userId: u._id, isArchived: false });
+      const plans = await Plan.find({
+        userId: u._id,
+        isArchived: false,
+        date: today,
+      });
       const summary = summarizePlans(plans);
       return {
         _id: u._id,
@@ -143,6 +151,11 @@ const overview = asyncHandler(async (req, res) => {
 
   const users = await User.find({ role: ROLES.USER }).sort({ name: 1 });
 
+  // Availability status reflects TODAY's load (vs one day's capacity), while
+  // utilization / workload below stay weekly. Keeps status consistent with
+  // the Employees table.
+  const today = currentDateString();
+
   const employees = await Promise.all(
     users.map(async (u) => {
       const plans = await Plan.find({
@@ -150,6 +163,14 @@ const overview = asyncHandler(async (req, res) => {
         isArchived: false,
         date: { $gte: from, $lte: to },
       }).sort({ date: 1, createdAt: 1 });
+
+      // Today's subset drives the availability status + free-at time.
+      const todayPlans = await Plan.find({
+        userId: u._id,
+        isArchived: false,
+        date: today,
+      });
+      const todaySummary = summarizePlans(todayPlans);
 
       // Totals across the range, comparing both times.
       const userMinutes = plans.reduce(
@@ -177,8 +198,8 @@ const overview = asyncHandler(async (req, res) => {
         assignedMinutes: summary.assignedMinutes,
         remainingMinutes: summary.remainingMinutes,
         utilization: summary.utilization,
-        status: summary.status,
-        freeAt: summary.freeAt,
+        status: todaySummary.status,
+        freeAt: todaySummary.freeAt,
       };
     })
   );
@@ -202,12 +223,54 @@ const updatePlanAsAdmin = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: "Plan not found" });
   }
 
-  const { adminExpectedTime, status } = req.body;
+  const {
+    projectName,
+    milestoneName,
+    taskDetails,
+    userEstimatedTime,
+    adminExpectedTime,
+    status,
+    subtasks,
+  } = req.body;
+
+  // Admin can edit any field of an employee's plan.
+  if (projectName !== undefined) plan.projectName = projectName;
+  if (milestoneName !== undefined) plan.milestoneName = milestoneName;
+  if (taskDetails !== undefined) plan.taskDetails = taskDetails;
   if (adminExpectedTime !== undefined) plan.adminExpectedTime = adminExpectedTime;
   if (status !== undefined) plan.status = status;
 
+  // Subtasks drive the total time when present.
+  if (subtasks !== undefined) {
+    plan.subtasks = Array.isArray(subtasks)
+      ? subtasks
+          .filter((s) => s && String(s.title || "").trim())
+          .map((s) => ({
+            title: String(s.title).trim(),
+            time: Math.max(0, Number(s.time) || 0),
+          }))
+      : [];
+  }
+  if (plan.subtasks.length > 0) {
+    plan.userEstimatedTime = plan.subtasks.reduce((sum, s) => sum + s.time, 0);
+  } else if (userEstimatedTime !== undefined) {
+    plan.userEstimatedTime = Math.max(0, Number(userEstimatedTime) || 0);
+  }
+
   await plan.save();
   res.json(plan);
+});
+
+/**
+ * DELETE /api/admin/plans/:id
+ * Admin deletes any employee's plan.
+ */
+const deletePlanAsAdmin = asyncHandler(async (req, res) => {
+  const plan = await Plan.findByIdAndDelete(req.params.id);
+  if (!plan) {
+    return res.status(404).json({ message: "Plan not found" });
+  }
+  res.json({ message: "Plan deleted" });
 });
 
 /**
@@ -265,9 +328,16 @@ const assignTask = asyncHandler(async (req, res) => {
 const resourceDashboard = asyncHandler(async (req, res) => {
   const users = await User.find({ role: ROLES.USER }).sort({ name: 1 });
 
+  // Capacity board is a "today" snapshot (today's tasks vs one day's capacity).
+  const today = currentDateString();
+
   const rows = await Promise.all(
     users.map(async (u) => {
-      const plans = await Plan.find({ userId: u._id, isArchived: false });
+      const plans = await Plan.find({
+        userId: u._id,
+        isArchived: false,
+        date: today,
+      });
       const summary = summarizePlans(plans);
       return {
         employeeId: u._id,
@@ -291,6 +361,7 @@ module.exports = {
   getUsers,
   getUserPlans,
   updatePlanAsAdmin,
+  deletePlanAsAdmin,
   assignTask,
   resourceDashboard,
   overview,

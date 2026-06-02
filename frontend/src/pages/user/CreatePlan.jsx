@@ -186,7 +186,6 @@ export default function CreatePlan() {
                   onChange={(e) =>
                     updateProject(pi, { projectName: e.target.value })
                   }
-                  placeholder="Race2Cloud"
                 />
               </label>
               {projects.length > 1 && (
@@ -214,7 +213,6 @@ export default function CreatePlan() {
                             milestoneName: e.target.value,
                           })
                         }
-                        placeholder="demerger"
                       />
                     </label>
                     <label>
@@ -224,7 +222,6 @@ export default function CreatePlan() {
                         onChange={(e) =>
                           updateTask(pi, ti, { taskDetails: e.target.value })
                         }
-                        placeholder="Need to work on demerger"
                       />
                     </label>
                     <label>
@@ -242,7 +239,6 @@ export default function CreatePlan() {
                             userEstimatedTime: e.target.value,
                           })
                         }
-                        placeholder="120"
                       />
                     </label>
                     {project.tasks.length > 1 && (
@@ -272,7 +268,6 @@ export default function CreatePlan() {
                                 title: e.target.value,
                               })
                             }
-                            placeholder={`Subtask ${si + 1}`}
                           />
                           <input
                             type="number"
@@ -283,7 +278,6 @@ export default function CreatePlan() {
                                 time: e.target.value,
                               })
                             }
-                            placeholder="min"
                           />
                           <button
                             type="button"

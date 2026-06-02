@@ -132,7 +132,9 @@ const getMyPlans = asyncHandler(async (req, res) => {
 
 /**
  * PUT /api/plans/:id
- * Update one of the employee's own tasks (not the admin expected time).
+ * Once a plan is submitted, an employee may only update its progress status —
+ * editing the task details/time is admin-only. Any other fields in the body
+ * are ignored here.
  */
 const updatePlan = asyncHandler(async (req, res) => {
   const plan = await Plan.findOne({
@@ -143,23 +145,8 @@ const updatePlan = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: "Plan not found" });
   }
 
-  const { projectName, milestoneName, taskDetails, userEstimatedTime, status, date, subtasks } =
-    req.body;
-  if (projectName !== undefined) plan.projectName = projectName;
-  if (milestoneName !== undefined) plan.milestoneName = milestoneName;
-  if (taskDetails !== undefined) plan.taskDetails = taskDetails;
+  const { status } = req.body;
   if (status !== undefined) plan.status = status;
-  if (date !== undefined) plan.date = date;
-
-  // Subtasks drive the total time when present.
-  if (subtasks !== undefined) {
-    plan.subtasks = normalizeSubtasks(subtasks);
-  }
-  if (plan.subtasks.length > 0) {
-    plan.userEstimatedTime = plan.subtasks.reduce((sum, s) => sum + s.time, 0);
-  } else if (userEstimatedTime !== undefined) {
-    plan.userEstimatedTime = Math.max(0, Number(userEstimatedTime) || 0);
-  }
 
   await plan.save();
   res.json(forUser(plan));
@@ -167,24 +154,11 @@ const updatePlan = asyncHandler(async (req, res) => {
 
 /**
  * DELETE /api/plans/:id
+ * Employees can no longer delete their own plans once submitted — only an
+ * admin can (via the admin plan routes).
  */
 const deletePlan = asyncHandler(async (req, res) => {
-  const plan = await Plan.findOne({
-    _id: req.params.id,
-    userId: req.user._id,
-  });
-  if (!plan) {
-    return res.status(404).json({ message: "Plan not found" });
-  }
-  // Tasks assigned by an admin cannot be removed by the employee.
-  if (plan.assignedByAdmin) {
-    return res
-      .status(403)
-      .json({ message: "Admin-assigned tasks can't be deleted" });
-  }
-
-  await plan.deleteOne();
-  res.json({ message: "Plan deleted" });
+  res.status(403).json({ message: "Only an admin can delete a plan." });
 });
 
 module.exports = { createPlan, createPlans, getMyPlans, updatePlan, deletePlan };

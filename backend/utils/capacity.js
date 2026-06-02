@@ -1,8 +1,5 @@
-const {
-  DAILY_CAPACITY,
-  AVAILABLE_THRESHOLD,
-  WORKDAY_START,
-} = require("../config/constants");
+const { DAILY_CAPACITY, AVAILABLE_THRESHOLD } = require("../config/constants");
+const { freeAtLabel } = require("./schedule");
 
 /**
  * Pick the authoritative minutes for a plan.
@@ -32,25 +29,12 @@ function statusFromRemaining(remaining) {
 }
 
 /**
- * Format the time at which the employee becomes free, starting from the
- * configured workday start + total assigned minutes. Returns "hh:mm AM/PM".
+ * The time at which the employee becomes free: workday start + total assigned
+ * working minutes, skipping the lunch break. Returns "hh:mm AM/PM".
  */
 function freeAtFrom(assignedMinutes, capacity = DAILY_CAPACITY) {
   if (assignedMinutes >= capacity) return "Over capacity";
-
-  const [startH, startM] = WORKDAY_START.split(":").map(Number);
-  const totalMinutes = startH * 60 + startM + assignedMinutes;
-
-  let hours = Math.floor(totalMinutes / 60) % 24;
-  const minutes = totalMinutes % 60;
-  const period = hours >= 12 ? "PM" : "AM";
-
-  hours = hours % 12;
-  if (hours === 0) hours = 12;
-
-  const mm = String(minutes).padStart(2, "0");
-  const hh = String(hours).padStart(2, "0");
-  return `${hh}:${mm} ${period}`;
+  return freeAtLabel(assignedMinutes);
 }
 
 /**
